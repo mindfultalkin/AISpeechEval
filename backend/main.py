@@ -26,7 +26,7 @@ client = OpenAI(
 def root():
     return {"message": "AI Evaluation Tool API is running"}
 
-@app.get("/health")
+@app.get("/api/health")
 def health_check():
     return {"status": "healthy", "api_configured": bool(os.getenv("GROQ_API_KEY"))}
 
