@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindfulTalk - TalkCoach AI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header with Logo -->
+        <div class="header">
+            <img src="mindfultalk logo .jpg" alt="MindfulTalk Logo" class="logo">
+            <div class="header-text">
+                <h1>TalkCoach AI</h1>
+                <p>Powered by MindfulTalk - Communicate Better</p>
+            </div>
+            <div class="api-badge" id="apiStatus">
+                <span class="status-dot"></span>
+                <span>Connecting...</span>
+            </div>
+        </div>
+
+        
+        <div class="main-grid">
+            <!-- Column 1: Audio Recording -->
+            <div class="column">
+                <h2>🎤 Audio Recording</h2>
+                <div class="audio-controls">
+                    <button class="mic-button" id="micButton" title="Click to start/stop recording">
+                        🎤
+                    </button>
+                    <div class="timer" id="timer">00:00</div>
+                    <div class="status" id="status">Click microphone to start recording</div>
+                    
+                    <!-- OR Divider -->
+                    <div class="divider">
+                        <span>OR</span>
+                    </div>
+                    
+                    <!-- File Upload Section -->
+                    <div class="upload-section">
+                        <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg" style="display: none;">
+                        <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('audioFileInput').click()">
+                            📁 Upload Audio File
+                        </button>
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <span id="fileName"></span>
+                            <button class="remove-file-btn" id="removeFileBtn">✕</button>
+                        </div>
+                    </div>
+                    
+                    <audio class="audio-player" id="audioPlayer" controls style="display: none;"></audio>
+                    <div class="transcription-box" id="transcriptionBox" style="display: none;">
+                        <strong>Transcription:</strong>
+                        <p id="transcriptionText"></p>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Column 2: Question & Rubrics -->
+            <div class="right-column">
+                <!-- Question -->
+                <div class="section">
+                    <h3>❓ Question</h3>
+                    <textarea id="questionInput" placeholder="Enter the evaluation question here...
+
+Example: Describe your daily morning routine and explain why it's important to you."></textarea>
+                </div>
+
+                <!-- Rubrics -->
+                <div class="section">
+                    <h3>📋 Evaluation Rubrics</h3>
+                    
+                    <!-- Tab Buttons -->
+                    <div class="tab-buttons">
+                        <button class="tab-btn active" id="rubricTabBtn">Evaluating  Rubrics</button>
+                        <button class="tab-btn" id="manualTabBtn">Manual Input</button>
+                    </div>
+
+                    <!-- Tab 1: Speaking Rubrics -->
+                    <div class="tab-content active" id="rubricTab">
+                        <!-- Level Selection -->
+                        <div style="margin-bottom: 16px;">
+                            <label style="font-weight: 600; font-size: 13px; margin-bottom: 8px; display: block;">Select Proficiency Level:</label>
+                            <div class="level-buttons" id="levelButtons"></div>
+                        </div>
+
+                        <!-- Categories (dynamically loaded) -->
+                        <div style="margin-bottom: 16px;">
+                            <label style="font-weight: 600; font-size: 13px; margin-bottom: 8px; display: block;">Select Categories:</label>
+                            <div class="categories-list" id="categoriesList"></div>
+                        </div>
+
+                        <!-- Summary -->
+                        <div class="summary-box">
+                            <div class="summary-title">📋 Selected Rubrics:</div>
+                            <div id="summaryBody">
+                                <span class="summary-empty">Select a level and categories to see summary...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Manual Input -->
+                    <div class="tab-content" id="manualTab">
+                        <textarea id="manualRubricsInput" style="min-height: 250px;" placeholder="Enter evaluation criteria here...
+
+Example:
+
+Comprehensibility (Beginner Level)
+Can be understood with effort
+
+Vocabulary & Word Choice (Beginner Level)
+Very limited; repetitive
+
+Fluency (Beginner Level)
+Frequent pauses; fragmented
+
+---
+
+Or write custom criteria:
+- Accuracy: Is the information correct?
+- Clarity: Is the explanation clear?
+- Organization: Is the response well-structured?"></textarea>
+                    </div>
+
+                    <button class="btn btn-primary" id="evaluateBtn" style="margin-top: 12px;" disabled>
+                        ⚡ Evaluate Audio Response
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="column">
+            <h2>📊 Evaluation Results</h2>
+            <div id="resultsContainer">
+                <div class="empty-state">
+                    No evaluations yet. Record audio and click "Evaluate" to see results.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
