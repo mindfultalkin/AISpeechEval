@@ -1,5 +1,6 @@
 // Configuration
 const API_BASE_URL = 'https://ai-speech-eval.vercel.app';
+const API_PREFIX = `${API_BASE_URL}/api`;
 
 // Rubrics Data - ONLY VALID CATEGORIES PER LEVEL
 const levels = [
@@ -36,10 +37,6 @@ const selectedCells = new Map();
 let uploadedFile = null;
 let audioSource = 'none'; // 'recording', 'upload', or 'none'
 
-// REST OF script.js stays the same...
-
-
-
 // DOM elements
 const micButton = document.getElementById('micButton');
 const status = document.getElementById('status');
@@ -60,6 +57,27 @@ const rubricTab = document.getElementById('rubricTab');
 const manualTab = document.getElementById('manualTab');
 const manualRubricsInput = document.getElementById('manualRubricsInput');
 
+const audioFileInput = document.getElementById('audioFileInput');
+const uploadBtn = document.getElementById('uploadBtn');
+const fileInfo = document.getElementById('fileInfo');
+const fileName = document.getElementById('fileName');
+const removeFileBtn = document.getElementById('removeFileBtn');
+
+// Helper: safely parse JSON responses and surface server text when available
+async function safeJson(response) {
+    const text = await response.text();
+    if (!response.ok) {
+        const detail = text ? text : `${response.status} ${response.statusText}`;
+        throw new Error(detail);
+    }
+    if (!text) return {};
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        throw new Error('Invalid JSON from server: ' + text);
+    }
+}
+
 // Tab switching
 rubricTabBtn.addEventListener('click', () => {
     rubricTabBtn.classList.add('active');
@@ -78,8 +96,8 @@ manualTabBtn.addEventListener('click', () => {
 // Check API connection
 async function checkApiConnection() {
     try {
-        const response = await fetch(`${API_BASE_URL}/health`);
-        const data = await response.json();
+        const response = await fetch(`${API_PREFIX}/health`);
+        const data = await safeJson(response);
         
         if (data.status === 'healthy' && data.api_configured) {
             apiStatus.className = 'api-badge connected';
@@ -89,11 +107,11 @@ async function checkApiConnection() {
             apiStatus.innerHTML = '<span class="status-dot"></span><span>Not Configured</span>';
         }
     } catch (error) {
+        console.error('API connection check failed:', error);
         apiStatus.className = 'api-badge disconnected';
         apiStatus.innerHTML = '<span class="status-dot"></span><span>Disconnected</span>';
     }
 }
-
 
 // Render level buttons
 function renderLevelButtons() {
@@ -264,13 +282,7 @@ function updateTimer() {
 }
 
 // File Upload Handling
-const audioFileInput = document.getElementById('audioFileInput');
-const uploadBtn = document.getElementById('uploadBtn');
-const fileInfo = document.getElementById('fileInfo');
-const fileName = document.getElementById('fileName');
-const removeFileBtn = document.getElementById('removeFileBtn');
-
-audioFileInput.addEventListener('change', async (e) => {
+audioFileInput?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -308,7 +320,7 @@ audioFileInput.addEventListener('change', async (e) => {
     await transcribeUploadedFile(file);
 });
 
-removeFileBtn.addEventListener('click', () => {
+removeFileBtn?.addEventListener('click', () => {
     uploadedFile = null;
     audioSource = 'none';
     audioFileInput.value = '';
@@ -329,18 +341,13 @@ async function transcribeUploadedFile(file) {
         const formData = new FormData();
         formData.append('audio', file);
 
-        const response = await fetch(`${API_BASE_URL}/transcribe`, {
+        const response = await fetch(`${API_PREFIX}/transcribe`, {
             method: 'POST',
             body: formData
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Transcription failed');
-        }
-
-        const data = await response.json();
-        transcribedText = data.text;
+        const data = await safeJson(response);
+        transcribedText = data.text || '';
 
         transcriptionBox.style.display = 'block';
         transcriptionText.textContent = transcribedText;
@@ -366,18 +373,13 @@ async function transcribeAudio() {
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
 
-        const response = await fetch(`${API_BASE_URL}/transcribe`, {
+        const response = await fetch(`${API_PREFIX}/transcribe`, {
             method: 'POST',
             body: formData
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Transcription failed');
-        }
-
-        const data = await response.json();
-        transcribedText = data.text;
+        const data = await safeJson(response);
+        transcribedText = data.text || '';
 
         transcriptionBox.style.display = 'block';
         transcriptionText.textContent = transcribedText;
@@ -393,7 +395,6 @@ async function transcribeAudio() {
     micButton.disabled = false;
 }
 
-// Evaluate button handler
 // Evaluate button handler
 evaluateBtn.addEventListener('click', () => {
     const question = questionInput.value.trim();
@@ -446,23 +447,18 @@ async function performEvaluation(question, rubricsText, response) {
         formData.append('rubrics', rubricsText);
         formData.append('response', response);
 
-        const result = await fetch(`${API_BASE_URL}/evaluate`, {
+        const result = await fetch(`${API_PREFIX}/evaluate`, {
             method: 'POST',
             body: formData
         });
 
-        if (!result.ok) {
-            const error = await result.json();
-            throw new Error(error.detail || 'Evaluation failed');
-        }
-
-        const evaluation = await result.json();
+        const evaluation = await safeJson(result);
 
         evaluation.timestamp = new Date().toLocaleString();
         evaluation.question = question;
         evaluation.response = response.length > 100 ? response.substring(0, 100) + '...' : response;
         evaluation.fullResponse = response;
-        evaluation.overallScore = evaluation.overall_score;
+        evaluation.overallScore = evaluation.overall_score || 0;
 
         evaluationHistory.unshift(evaluation);
         displayResults();
@@ -492,24 +488,24 @@ function displayResults() {
     }
 
     let html = '';
-    evaluationHistory.forEach((eval, index) => {
+    evaluationHistory.forEach((evalItem, index) => {
         html += `
             <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--color-border);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <strong>Evaluation #${evaluationHistory.length - index}</strong>
-                    <span style="color: var(--color-gray-300); font-size: 13px;">${eval.timestamp}</span>
+                    <span style="color: var(--color-gray-300); font-size: 13px;">${evalItem.timestamp}</span>
                 </div>
                 <div style="margin-bottom: 8px;">
-                    <strong>Question:</strong> ${eval.question}
+                    <strong>Question:</strong> ${evalItem.question}
                 </div>
                 <div style="margin-bottom: 8px;">
-                    <strong>Response:</strong> <span style="color: var(--color-gray-300);">${eval.response}</span>
+                    <strong>Response:</strong> <span style="color: var(--color-gray-300);">${evalItem.response}</span>
                 </div>
                 <div style="margin-bottom: 8px;">
                     <strong>Overall Score:</strong> 
-                    <span class="score ${getScoreClass(eval.overallScore)}">${eval.overallScore}/100</span>
+                    <span class="score ${getScoreClass(evalItem.overallScore)}">${evalItem.overallScore}/100</span>
                 </div>
-                ${eval.summary ? `<div style="margin-bottom: 12px;"><strong>Summary:</strong> ${eval.summary}</div>` : ''}
+                ${evalItem.summary ? `<div style="margin-bottom: 12px;"><strong>Summary:</strong> ${evalItem.summary}</div>` : ''}
                 <table class="results-table">
                     <thead>
                         <tr>
@@ -521,7 +517,7 @@ function displayResults() {
                     <tbody>
         `;
 
-        eval.rubrics.forEach(rubric => {
+        (evalItem.rubrics || []).forEach(rubric => {
             html += `
                 <tr>
                     <td>${rubric.criterion}</td>

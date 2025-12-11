@@ -3,9 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 import os
 import json
-from dotenv import load_dotenv
+import tempfile
+import logging
 
+from dotenv import load_dotenv
 load_dotenv()
+
+# logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("ai-eval-api")
 
 app = FastAPI(title="AI Evaluation Tool API")
 
@@ -17,8 +23,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Ensure GROQ_API_KEY is set in your Vercel env (Project Settings -> Environment Variables)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    logger.warning("GROQ_API_KEY is not set. /api/health will report api_configured=false")
+
 client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
+    api_key=GROQ_API_KEY,
     base_url="https://api.groq.com/openai/v1"
 )
 
@@ -28,30 +39,62 @@ def root():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy", "api_configured": bool(os.getenv("GROQ_API_KEY"))}
+    return {"status": "healthy", "api_configured": bool(GROQ_API_KEY)}
 
 @app.post("/api/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):
+    """Accepts a multipart file upload under field 'audio' and returns transcription JSON: { "text": "<transcription>" }"""
+    temp_path = None
     try:
-        temp_file = f"temp_{audio.filename}"
-        with open(temp_file, "wb") as f:
+        # create a safe temp file
+        suffix = os.path.splitext(audio.filename)[1] if audio.filename else ".wav"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix="upload_", dir=".") as tmp:
+            temp_path = tmp.name
             content = await audio.read()
-            f.write(content)
-        
-        with open(temp_file, "rb") as audio_file:
+            tmp.write(content)
+            tmp.flush()
+
+        logger.info("Saved uploaded file to %s (size=%d)", temp_path, os.path.getsize(temp_path))
+
+        # Call Groq/OpenAI transcription API via client; SDK responses vary so handle flexibly
+        with open(temp_path, "rb") as audio_file:
             transcription = client.audio.transcriptions.create(
                 file=audio_file,
                 model="whisper-large-v3",
                 response_format="json",
                 language="en"
             )
-        
-        os.remove(temp_file)
-        
-        return {"text": transcription.text}
-        
+
+        # transcription could be a dict-like or object with .text; normalize
+        text = None
+        if isinstance(transcription, dict):
+            # Try some likely keys
+            text = transcription.get("text") or transcription.get("transcript") or transcription.get("data", {}).get("text")
+        else:
+            # object-like
+            text = getattr(transcription, "text", None) or getattr(transcription, "transcript", None)
+
+        if text is None:
+            # Attempt to stringify the whole response as fallback
+            try:
+                text = json.dumps(transcription)
+            except Exception:
+                text = str(transcription)
+
+        logger.info("Transcription complete (len=%d)", len(text) if text else 0)
+        return {"text": text}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Transcription error")
+        raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
+    finally:
+        # Always attempt to remove the temp file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                logger.warning("Could not remove temp file %s", temp_path)
+
 
 @app.post("/api/evaluate")
 async def evaluate_response(
@@ -59,6 +102,7 @@ async def evaluate_response(
     rubrics: str = Form(...),
     response: str = Form(...)
 ):
+    """Sends a prompt to the model to evaluate the response based on rubrics; returns normalized JSON."""
     try:
         prompt = f"""You are an expert evaluator. Evaluate the response based on the provided rubrics.
 
@@ -83,11 +127,14 @@ Return ONLY valid JSON in this exact format:
 
 Do not include any markdown formatting, code blocks, or extra text. Only return the JSON object."""
 
+        logger.info("Sending evaluation request to model (question len=%d, rubrics len=%d, response len=%d)",
+                    len(question), len(rubrics), len(response))
+
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {
-                    "role": "system", 
+                    "role": "system",
                     "content": "You are an expert evaluator. Always score on a 0-100 scale. Return only valid JSON without markdown formatting."
                 },
                 {"role": "user", "content": prompt}
@@ -95,39 +142,61 @@ Do not include any markdown formatting, code blocks, or extra text. Only return 
             temperature=0.3,
             max_tokens=2000
         )
-        
-        result_text = completion.choices[0].message.content.strip()
-        
-        # Clean markdown code blocks if present
-        code_fence = '```'
-        if code_fence in result_text:
-            lines = result_text.split('\n')
-            cleaned_lines = [line for line in lines if not line.strip().startswith(code_fence)]
-            result_text = '\n'.join(cleaned_lines).strip()
-        
-        # Parse JSON
-        evaluation = json.loads(result_text)
-        
+
+        # Extract text
+        raw_text = None
+        try:
+            raw_text = completion.choices[0].message.content.strip()
+        except Exception:
+            # fallback: try to stringify
+            raw_text = str(completion)
+        logger.debug("Model returned: %s", raw_text[:1000])
+
+        # Some models may add explanatory text before/after the JSON. Try to extract the JSON substring.
+        json_text = raw_text
+        first_brace = raw_text.find('{')
+        last_brace = raw_text.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            json_text = raw_text[first_brace:last_brace+1]
+        else:
+            # fallback leave as-is; the json.loads() below will throw if invalid
+            json_text = raw_text
+
+        try:
+            evaluation = json.loads(json_text)
+        except json.JSONDecodeError as e:
+            logger.exception("JSON parse failed. Raw model output: %s", raw_text[:2000])
+            raise HTTPException(status_code=500, detail=f"JSON parse error from model: {str(e)}")
+
         # Normalize scores if they are in 0-10 range
         def normalize_score(score):
             if isinstance(score, (int, float)) and 0 < score <= 10:
                 return int(score * 10)
+            try:
+                if isinstance(score, str) and score.strip():
+                    num = float(score)
+                    if 0 < num <= 10:
+                        return int(num * 10)
+                    return int(num)
+            except Exception:
+                return 0
             return int(score) if isinstance(score, (int, float)) else 0
-        
-        # Apply normalization
-        if "rubrics" in evaluation:
+
+        if "rubrics" in evaluation and isinstance(evaluation["rubrics"], list):
             for rubric in evaluation["rubrics"]:
                 if "score" in rubric:
                     rubric["score"] = normalize_score(rubric["score"])
-        
+
         if "overall_score" in evaluation:
             evaluation["overall_score"] = normalize_score(evaluation["overall_score"])
-        
+
         return evaluation
-    
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"JSON parse error: {str(e)}")
+
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("Evaluation error")
         raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
-    
-app = app 
+
+# keep the app reference for Vercel/Uvicorn
+app = app

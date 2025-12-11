@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MindfulTalk - TalkCoach AI</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
     <div class="container">
         <!-- Header with Logo -->
         <div class="header">
-            <img src="mindfultalk logo.jpg" alt="MindfulTalk Logo" class="logo">
+            <img src="mindfultalk-logo.jpg" alt="MindfulTalk Logo" class="logo" loading="lazy" />
             <div class="header-text">
                 <h1>TalkCoach AI</h1>
                 <p>Powered by MindfulTalk - Communicate Better</p>
@@ -21,26 +21,21 @@
             </div>
         </div>
 
-        
         <div class="main-grid">
             <!-- Column 1: Audio Recording -->
             <div class="column">
                 <h2>🎤 Audio Recording</h2>
                 <div class="audio-controls">
-                    <button class="mic-button" id="micButton" title="Click to start/stop recording">
-                        🎤
-                    </button>
+                    <button class="mic-button" id="micButton" title="Click to start/stop recording">🎤</button>
                     <div class="timer" id="timer">00:00</div>
                     <div class="status" id="status">Click microphone to start recording</div>
-                    
+
                     <!-- OR Divider -->
-                    <div class="divider">
-                        <span>OR</span>
-                    </div>
-                    
+                    <div class="divider"><span>OR</span></div>
+
                     <!-- File Upload Section -->
                     <div class="upload-section">
-                        <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg" style="display: none;">
+                        <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg" style="display: none;" />
                         <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('audioFileInput').click()">
                             📁 Upload Audio File
                         </button>
@@ -49,7 +44,7 @@
                             <button class="remove-file-btn" id="removeFileBtn">✕</button>
                         </div>
                     </div>
-                    
+
                     <audio class="audio-player" id="audioPlayer" controls style="display: none;"></audio>
                     <div class="transcription-box" id="transcriptionBox" style="display: none;">
                         <strong>Transcription:</strong>
@@ -57,7 +52,6 @@
                     </div>
                 </div>
             </div>
-
 
             <!-- Column 2: Question & Rubrics -->
             <div class="right-column">
@@ -72,7 +66,7 @@ Example: Describe your daily morning routine and explain why it's important to y
                 <!-- Rubrics -->
                 <div class="section">
                     <h3>📋 Evaluation Rubrics</h3>
-                    
+
                     <!-- Tab Buttons -->
                     <div class="tab-buttons">
                         <button class="tab-btn active" id="rubricTabBtn">Evaluating  Rubrics</button>
@@ -125,9 +119,7 @@ Or write custom criteria:
 - Organization: Is the response well-structured?"></textarea>
                     </div>
 
-                    <button class="btn btn-primary" id="evaluateBtn" style="margin-top: 12px;" disabled>
-                        ⚡ Evaluate Audio Response
-                    </button>
+                    <button class="btn btn-primary" id="evaluateBtn" style="margin-top: 12px;" disabled>⚡ Evaluate Audio Response</button>
                 </div>
             </div>
         </div>
@@ -143,6 +135,7 @@ Or write custom criteria:
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- load script after DOM is parsed -->
+    <script src="script.js" defer></script>
 </body>
 </html>
