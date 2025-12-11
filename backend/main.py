@@ -30,7 +30,7 @@ def root():
 def health_check():
     return {"status": "healthy", "api_configured": bool(os.getenv("GROQ_API_KEY"))}
 
-@app.post("/transcribe")
+@app.post("/api/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):
     try:
         temp_file = f"temp_{audio.filename}"
