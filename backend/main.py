@@ -43,57 +43,45 @@ def health_check():
 
 @app.post("/api/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):
-    """Accepts a multipart file upload under field 'audio' and returns transcription JSON: { "text": "<transcription>" }"""
-    temp_path = None
     try:
-        # create a safe temp file
-        suffix = os.path.splitext(audio.filename)[1] if audio.filename else ".wav"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix="upload_", dir=".") as tmp:
-            temp_path = tmp.name
-            content = await audio.read()
-            tmp.write(content)
-            tmp.flush()
+        # read uploaded file into memory
+        content = await audio.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
 
-        logger.info("Saved uploaded file to %s (size=%d)", temp_path, os.path.getsize(temp_path))
+        audio_buffer = io.BytesIO(content)
+        # optionally set a name/seek to start
+        audio_buffer.name = audio.filename or "upload.webm"
+        audio_buffer.seek(0)
 
-        # Call Groq/OpenAI transcription API via client; SDK responses vary so handle flexibly
-        with open(temp_path, "rb") as audio_file:
-            transcription = client.audio.transcriptions.create(
-                file=audio_file,
-                model="whisper-large-v3",
-                response_format="json",
-                language="en"
-            )
+        # Call Groq/OpenAI transcription API using the file-like object
+        transcription = client.audio.transcriptions.create(
+            file=audio_buffer,
+            model="whisper-large-v3",
+            response_format="json",
+            language="en"
+        )
 
-        # transcription could be a dict-like or object with .text; normalize
+        # Normalize the response like before
         text = None
         if isinstance(transcription, dict):
-            # Try some likely keys
-            text = transcription.get("text") or transcription.get("transcript") or transcription.get("data", {}).get("text")
+            text = transcription.get("text") or transcription.get("transcript")
         else:
-            # object-like
             text = getattr(transcription, "text", None) or getattr(transcription, "transcript", None)
 
         if text is None:
-            # Attempt to stringify the whole response as fallback
             try:
                 text = json.dumps(transcription)
             except Exception:
                 text = str(transcription)
 
-        logger.info("Transcription complete (len=%d)", len(text) if text else 0)
         return {"text": text}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception("Transcription error")
+        logger.exception("Transcription error (in-memory)")
         raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
-    finally:
-        # Always attempt to remove the temp file
-        if temp_path and os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception:
-                logger.warning("Could not remove temp file %s", temp_path)
 
 
 @app.post("/api/evaluate")
