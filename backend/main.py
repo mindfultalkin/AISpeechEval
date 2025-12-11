@@ -5,6 +5,7 @@ import os
 import json
 import tempfile
 import logging
+import io
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -43,16 +44,22 @@ def health_check():
 
 @app.post("/api/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):
+    """
+    In-memory transcription: read uploaded file into BytesIO and send to transcription API.
+    Avoids writing to disk (necessary in many serverless environments like Vercel).
+    """
     try:
-        # read uploaded file into memory
         content = await audio.read()
         if not content:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
 
+        # Use BytesIO so we don't write to the function's filesystem
         audio_buffer = io.BytesIO(content)
-        # optionally set a name/seek to start
+        # Some SDKs expect a 'name' attribute on the file-like object
         audio_buffer.name = audio.filename or "upload.webm"
         audio_buffer.seek(0)
+
+        logger.info("Received upload (name=%s size=%d)", audio_buffer.name, len(content))
 
         # Call Groq/OpenAI transcription API using the file-like object
         transcription = client.audio.transcriptions.create(
@@ -62,10 +69,10 @@ async def transcribe_audio(audio: UploadFile = File(...)):
             language="en"
         )
 
-        # Normalize the response like before
+        # Normalize transcription response (handle dict or SDK object)
         text = None
         if isinstance(transcription, dict):
-            text = transcription.get("text") or transcription.get("transcript")
+            text = transcription.get("text") or transcription.get("transcript") or transcription.get("data", {}).get("text")
         else:
             text = getattr(transcription, "text", None) or getattr(transcription, "transcript", None)
 
@@ -75,13 +82,16 @@ async def transcribe_audio(audio: UploadFile = File(...)):
             except Exception:
                 text = str(transcription)
 
+        logger.info("Transcription complete (len=%d)", len(text) if text else 0)
         return {"text": text}
 
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("Transcription error (in-memory)")
+        # return the error detail so frontend sees the message (already JSON via HTTPException)
         raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
+
 
 
 @app.post("/api/evaluate")
