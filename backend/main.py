@@ -53,7 +53,7 @@ async def transcribe_audio(audio: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/evaluate")
+@app.post("/api/evaluate")
 async def evaluate_response(
     question: str = Form(...),
     rubrics: str = Form(...),
@@ -129,3 +129,5 @@ Do not include any markdown formatting, code blocks, or extra text. Only return 
         raise HTTPException(status_code=500, detail=f"JSON parse error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
+    
+app = app 

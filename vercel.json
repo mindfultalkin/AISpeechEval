@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "backend/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "backend/main.py"
+    },
+    {
+      "src": "/frontend/(.*)",
+      "dest": "frontend/$1"
+    },
+    {
+      "src": "/",
+      "dest": "frontend/index.html"
+    },
+    {
+      "src": "/(.*\\.(css|js|jpg|png|ico))",
+      "dest": "frontend/$1"
+    }
+  ],
+  "outputDirectory": "frontend"
+}
