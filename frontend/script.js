@@ -19,7 +19,6 @@ const categories = [
     { key: "fluency", name: "Fluency", descriptions: ["Frequent pauses; fragmented", "Hesitant but improving", "Mostly smooth with some pauses", "Smooth, confident", "Effortless, controlled pacing"], validLevels: [0,1,2,3,4] },
     { key: "organization", name: "Organization of Ideas", descriptions: [null, "Basic sequencing", "Clear structure", "Well organized with transitions", "Strategic, persuasive flow"], validLevels: [1,2,3,4] },
     { key: "audience", name: "Audience Awareness", descriptions: [null, null, "Adjusts tone occasionally", "Adapts tone/examples to audience", "Highly adaptive; anticipates reactions"], validLevels: [2,3,4] },
-    { key: "delivery", name: "Delivery & Presence", descriptions: [null, null, "Adequate confidence & clarity", "Confident, engaging delivery", "Charismatic, polished, professional presence"], validLevels: [2,3,4] },
     { key: "interaction", name: "Interaction & Spontaneous Response", descriptions: [null, "Responds to simple questions", "Handles basic Q&A", "Strong, confident interaction", "Agile, persuasive, diplomatic improvisation"], validLevels: [1,2,3,4] }
 ];
 
@@ -363,7 +362,6 @@ async function transcribeUploadedFile(file) {
     micButton.disabled = false;
 }
 
-
 async function transcribeAudio() {
     status.innerHTML = '<span class="loading"></span>Transcribing audio...';
     evaluateBtn.disabled = true;
@@ -435,7 +433,6 @@ evaluateBtn.addEventListener('click', () => {
     performEvaluation(question, rubricsText, transcribedText);
 });
 
-
 async function performEvaluation(question, rubricsText, response) {
     status.innerHTML = '<span class="loading"></span>Evaluating with AI...';
     evaluateBtn.disabled = true;
@@ -463,6 +460,9 @@ async function performEvaluation(question, rubricsText, response) {
         evaluationHistory.unshift(evaluation);
         displayResults();
 
+        // ✅ Auto-scroll to results after they appear
+        scrollToResults();
+
         status.textContent = `✅ Evaluation complete - Score: ${evaluation.overallScore}/100`;
 
     } catch (error) {
@@ -472,6 +472,17 @@ async function performEvaluation(question, rubricsText, response) {
 
     evaluateBtn.disabled = false;
     micButton.disabled = false;
+}
+
+// Auto-scroll to results section
+function scrollToResults() {
+    // Small delay to ensure results are rendered
+    setTimeout(() => {
+        resultsContainer.scrollIntoView({ 
+            behavior: 'smooth',  // Smooth scrolling animation
+            block: 'start'       // Align to top of viewport
+        });
+    }, 100);
 }
 
 function getScoreClass(score) {
