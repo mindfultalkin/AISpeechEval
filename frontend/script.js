@@ -1,8 +1,8 @@
 // Configuration
-const API_BASE_URL = 'https://ai-speech-eval.vercel.app';
+const API_BASE_URL = 'http://localhost:8000';  // Change to your backend URL
 const API_PREFIX = `${API_BASE_URL}/api`;
 
-// Rubrics Data - ONLY VALID CATEGORIES PER LEVEL
+// Rubrics Data
 const levels = [
     { id: "1", label: "Beginner" },
     { id: "2", label: "Developing" },
@@ -22,7 +22,7 @@ const categories = [
     { key: "interaction", name: "Interaction & Spontaneous Response", descriptions: [null, "Responds to simple questions", "Handles basic Q&A", "Strong, confident interaction", "Agile, persuasive, diplomatic improvisation"], validLevels: [1,2,3,4] }
 ];
 
-// State - FIXED: No duplicates
+// State
 let mediaRecorder;
 let audioChunks = [];
 let isRecording = false;
@@ -34,7 +34,7 @@ let evaluationHistory = [];
 let selectedLevel = null;
 const selectedCells = new Map();
 let uploadedFile = null;
-let audioSource = 'none'; // 'recording', 'upload', or 'none'
+let audioSource = 'none';
 
 // DOM elements
 const micButton = document.getElementById('micButton');
@@ -62,7 +62,7 @@ const fileInfo = document.getElementById('fileInfo');
 const fileName = document.getElementById('fileName');
 const removeFileBtn = document.getElementById('removeFileBtn');
 
-// Helper: safely parse JSON responses and surface server text when available
+// Helper: safely parse JSON responses
 async function safeJson(response) {
     const text = await response.text();
     if (!response.ok) {
@@ -128,11 +128,32 @@ function renderLevelButtons() {
             selectedCells.clear();
             renderCategories();
             updateSummary();
+            
+            // Show scoring info
+            const levelLabel = levels[selectedLevel].label;
+            const multiplier = getMultiplierForLevel(levelLabel);
+            const adjustment = ((multiplier - 1) * 100).toFixed(0);
+            const adjustmentText = adjustment > 0 ? `+${adjustment}% generous` : 
+                                 adjustment < 0 ? `${adjustment}% strict` : 'no adjustment';
+            
+            status.textContent = `Selected ${levelLabel} level - ${adjustmentText}`;
         });
     });
 }
 
-// Render categories based on selected level
+// Get multiplier for level
+function getMultiplierForLevel(levelLabel) {
+    const multipliers = {
+        "Beginner": 1.40,
+        "Developing": 1.25,
+        "Competent": 1.15,
+        "Proficient": 1.00,
+        "Advanced": 0.85
+    };
+    return multipliers[levelLabel] || 1.0;
+}
+
+// Render categories
 function renderCategories() {
     if (selectedLevel === null) {
         categoriesList.innerHTML = '<p style="color: var(--color-gray-300); font-style: italic;">Select a level first</p>';
@@ -141,7 +162,6 @@ function renderCategories() {
 
     let html = '';
     categories.forEach(cat => {
-        // Only show if valid for this level
         if (cat.validLevels.includes(selectedLevel)) {
             const cellKey = `${cat.key}-${selectedLevel}`;
             const isChecked = selectedCells.has(cellKey);
@@ -190,10 +210,15 @@ function updateSummary() {
     let html = '';
     selectedCells.forEach(({ cat, levelIdx, desc }) => {
         const levelLabel = levels[levelIdx].label;
+        const multiplier = getMultiplierForLevel(levelLabel);
+        const adjustment = ((multiplier - 1) * 100).toFixed(0);
+        const adjustmentText = adjustment > 0 ? `(+${adjustment}%)` : 
+                             adjustment < 0 ? `(${adjustment}%)` : '';
+        
         html += `
             <div class="summary-item">
                 <div class="summary-item-cat">${cat}</div>
-                <div class="summary-item-level">Level: ${levelLabel}</div>
+                <div class="summary-item-level">Level: ${levelLabel} ${adjustmentText}</div>
                 <div class="summary-item-desc">${desc}</div>
             </div>
         `;
@@ -285,13 +310,11 @@ audioFileInput?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Check file size (max 25MB)
     if (file.size > 25 * 1024 * 1024) {
         alert('File size too large. Maximum 25MB allowed.');
         return;
     }
 
-    // Check file type
     const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/webm', 'audio/ogg', 'audio/x-m4a'];
     if (!allowedTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|webm|ogg)$/i)) {
         alert('Invalid file type. Please upload an audio file (MP3, WAV, M4A, WebM, OGG).');
@@ -301,21 +324,17 @@ audioFileInput?.addEventListener('change', async (e) => {
     uploadedFile = file;
     audioSource = 'upload';
 
-    // Show file info
     fileName.textContent = file.name;
     fileInfo.style.display = 'flex';
     uploadBtn.style.display = 'none';
 
-    // Show audio player
     const fileUrl = URL.createObjectURL(file);
     audioPlayer.src = fileUrl;
     audioPlayer.style.display = 'block';
 
-    // Clear previous recording if any
     audioBlob = null;
     timer.textContent = '00:00';
 
-    // Auto-transcribe the uploaded file
     await transcribeUploadedFile(file);
 });
 
@@ -393,6 +412,25 @@ async function transcribeAudio() {
     micButton.disabled = false;
 }
 
+// Extract level from manual input
+function extractLevelFromManualInput(rubricsText) {
+    const levelKeywords = {
+        'beginner': 'Beginner',
+        'developing': 'Developing', 
+        'competent': 'Competent',
+        'proficient': 'Proficient',
+        'advanced': 'Advanced'
+    };
+    
+    const lowerText = rubricsText.toLowerCase();
+    for (const [keyword, level] of Object.entries(levelKeywords)) {
+        if (lowerText.includes(keyword)) {
+            return level;
+        }
+    }
+    return '';
+}
+
 // Evaluate button handler
 evaluateBtn.addEventListener('click', () => {
     const question = questionInput.value.trim();
@@ -403,26 +441,33 @@ evaluateBtn.addEventListener('click', () => {
     }
 
     let rubricsText = '';
+    let selectedLevelLabel = '';
 
-    // Check which tab is active
     if (rubricTabBtn.classList.contains('active')) {
-        // Speaking Rubrics Tab
         if (selectedCells.size === 0) {
             alert('Please select evaluation rubrics');
             return;
         }
 
-        // Build rubrics text
+        if (selectedLevel !== null) {
+            selectedLevelLabel = levels[selectedLevel].label;
+        }
+
         selectedCells.forEach(({ cat, levelIdx, desc }) => {
-            rubricsText += `${cat} (${levels[levelIdx].label})\n${desc}\n\n`;
+            const levelLabel = levels[levelIdx].label;
+            rubricsText += `${cat} (${levelLabel} Level)\n${desc}\n\n`;
         });
+
+        if (selectedLevelLabel) {
+            rubricsText = `EVALUATION LEVEL: ${selectedLevelLabel}\n\n` + rubricsText;
+        }
     } else {
-        // Manual Input Tab
         rubricsText = manualRubricsInput.value.trim();
         if (!rubricsText) {
             alert('Please enter evaluation rubrics');
             return;
         }
+        selectedLevelLabel = extractLevelFromManualInput(rubricsText);
     }
 
     if (!transcribedText) {
@@ -430,10 +475,10 @@ evaluateBtn.addEventListener('click', () => {
         return;
     }
 
-    performEvaluation(question, rubricsText, transcribedText);
+    performEvaluation(question, rubricsText, transcribedText, selectedLevelLabel);
 });
 
-async function performEvaluation(question, rubricsText, response) {
+async function performEvaluation(question, rubricsText, response, levelLabel = '') {
     status.innerHTML = '<span class="loading"></span>Evaluating with AI...';
     evaluateBtn.disabled = true;
     micButton.disabled = true;
@@ -443,6 +488,10 @@ async function performEvaluation(question, rubricsText, response) {
         formData.append('question', question);
         formData.append('rubrics', rubricsText);
         formData.append('response', response);
+        
+        if (levelLabel) {
+            formData.append('level', levelLabel);
+        }
 
         const result = await fetch(`${API_PREFIX}/evaluate`, {
             method: 'POST',
@@ -451,19 +500,31 @@ async function performEvaluation(question, rubricsText, response) {
 
         const evaluation = await safeJson(result);
 
+        // Store with additional metadata
         evaluation.timestamp = new Date().toLocaleString();
         evaluation.question = question;
         evaluation.response = response.length > 100 ? response.substring(0, 100) + '...' : response;
         evaluation.fullResponse = response;
-        evaluation.overallScore = evaluation.overall_score || 0;
+        evaluation.overallScore = evaluation.overall_score || evaluation.overallScore || 0;
+        evaluation.baseScore = evaluation.base_score || evaluation.baseScore || 70;
+        evaluation.level = levelLabel || evaluation.evaluated_level || 'Not specified';
+        evaluation.multiplier = evaluation.multiplier_applied || evaluation.scaling_applied || 1.0;
+        
+        // Add cache info if available
+        if (evaluation.cache_used !== undefined) {
+            evaluation.cacheInfo = evaluation.cache_used ? "Used cached base score" : "Calculated new base score";
+        }
 
         evaluationHistory.unshift(evaluation);
         displayResults();
 
-        // ✅ Auto-scroll to results after they appear
         scrollToResults();
 
-        status.textContent = `✅ Evaluation complete - Score: ${evaluation.overallScore}/100`;
+        const adjustment = ((evaluation.multiplier - 1) * 100).toFixed(0);
+        const adjustmentText = adjustment > 0 ? `+${adjustment}% generous` : 
+                             adjustment < 0 ? `${adjustment}% strict` : 'no adjustment';
+        
+        status.textContent = `✅ Evaluation complete: ${evaluation.overallScore}/100 for ${evaluation.level} (${adjustmentText})`;
 
     } catch (error) {
         console.error('Evaluation error:', error);
@@ -474,13 +535,12 @@ async function performEvaluation(question, rubricsText, response) {
     micButton.disabled = false;
 }
 
-// Auto-scroll to results section
+// Auto-scroll to results
 function scrollToResults() {
-    // Small delay to ensure results are rendered
     setTimeout(() => {
         resultsContainer.scrollIntoView({ 
-            behavior: 'smooth',  // Smooth scrolling animation
-            block: 'start'       // Align to top of viewport
+            behavior: 'smooth',
+            block: 'start'
         });
     }, 100);
 }
@@ -489,6 +549,7 @@ function getScoreClass(score) {
     if (score >= 90) return 'excellent';
     if (score >= 80) return 'good';
     if (score >= 70) return 'fair';
+    if (score >= 60) return 'fair';
     return 'poor';
 }
 
@@ -500,6 +561,21 @@ function displayResults() {
 
     let html = '';
     evaluationHistory.forEach((evalItem, index) => {
+        const levelInfo = evalItem.level || evalItem.evaluated_level || 'Not specified';
+        const baseScore = evalItem.baseScore || 70;
+        const finalScore = evalItem.overallScore;
+        const multiplier = evalItem.multiplier || 1.0;
+        
+        const adjustment = ((multiplier - 1) * 100).toFixed(0);
+        let adjustmentHtml = '';
+        if (adjustment > 0) {
+            adjustmentHtml = `<span style="color: #10b981; font-weight: 600;">(+${adjustment}% generous)</span>`;
+        } else if (adjustment < 0) {
+            adjustmentHtml = `<span style="color: #ef4444; font-weight: 600;">(${adjustment}% strict)</span>`;
+        }
+        
+        const cacheInfo = evalItem.cacheInfo ? `<div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${evalItem.cacheInfo}</div>` : '';
+        
         html += `
             <div style="margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--color-border);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -510,11 +586,27 @@ function displayResults() {
                     <strong>Question:</strong> ${evalItem.question}
                 </div>
                 <div style="margin-bottom: 8px;">
-                    <strong>Response:</strong> <span style="color: var(--color-gray-300);">${evalItem.response}</span>
+                    <strong>Proficiency Level:</strong> 
+                    <span style="color: var(--color-primary); font-weight: 600;">${levelInfo}</span>
+                    ${adjustmentHtml}
+                    ${cacheInfo}
                 </div>
                 <div style="margin-bottom: 8px;">
-                    <strong>Overall Score:</strong> 
-                    <span class="score ${getScoreClass(evalItem.overallScore)}">${evalItem.overallScore}/100</span>
+                    <strong>Response:</strong> <span style="color: var(--color-gray-300);">${evalItem.response}</span>
+                </div>
+                <div style="margin-bottom: 8px; background: rgba(var(--color-teal-500-rgb), 0.05); padding: 12px; border-radius: 8px;">
+                    <strong>Scoring (CONSISTENT base score):</strong> 
+                    <div style="display: flex; gap: 20px; margin-top: 8px;">
+                        <div>
+                            <span style="font-size: 12px; color: var(--color-gray-300);">Base Score (Native Speaker):</span><br>
+                            <span style="font-size: 18px; font-weight: 700;">${baseScore}/100</span>
+                        </div>
+                        <div style="color: var(--color-gray-300);">× ${multiplier.toFixed(2)} →</div>
+                        <div>
+                            <span style="font-size: 12px; color: var(--color-gray-300);">Adjusted for ${levelInfo}:</span><br>
+                            <span class="score ${getScoreClass(finalScore)}" style="font-size: 18px;">${finalScore}/100</span>
+                        </div>
+                    </div>
                 </div>
                 ${evalItem.summary ? `<div style="margin-bottom: 12px;"><strong>Summary:</strong> ${evalItem.summary}</div>` : ''}
                 <table class="results-table">
@@ -533,7 +625,7 @@ function displayResults() {
                 <tr>
                     <td>${rubric.criterion}</td>
                     <td><span class="score ${getScoreClass(rubric.score)}">${rubric.score}/100</span></td>
-                    <td>${rubric.feedback}</td>
+                    <td>${rubric.feedback || ''}</td>
                 </tr>
             `;
         });
