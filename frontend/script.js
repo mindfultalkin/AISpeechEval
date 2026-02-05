@@ -1,5 +1,5 @@
 // Configuration
-const API_BASE_URL = 'http://localhost:8000';  // Change to your backend URL
+const API_BASE_URL = 'https://ai-speech-eval.vercel.app/';  // Change to your backend URL
 const API_PREFIX = `${API_BASE_URL}/api`;
 
 // Rubrics Data
