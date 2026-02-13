@@ -6,6 +6,7 @@ import json
 import tempfile
 import logging
 import io
+import requests
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -195,6 +196,59 @@ Do not include any markdown formatting, code blocks, or extra text. Only return 
     except Exception as e:
         logger.exception("Evaluation error")
         raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
+    
+@app.post("/api/transcribe-url")
+async def transcribe_from_url(payload: dict):
+    """
+    Transcribe audio/video from S3 or any public URL.
+    Backend downloads the file and sends to Whisper.
+    """
+    try:
+        media_url = payload.get("mediaUrl")
+        media_type = payload.get("mediaType", "audio")
+
+        if not media_url:
+            raise HTTPException(status_code=400, detail="mediaUrl is required")
+
+        logger.info("Downloading media from URL: %s", media_url)
+
+        response = requests.get(media_url, stream=True, timeout=60)
+        response.raise_for_status()
+
+        content = response.content
+        if not content:
+            raise HTTPException(status_code=400, detail="Downloaded file is empty")
+
+        audio_buffer = io.BytesIO(content)
+        audio_buffer.name = "remote_audio.mp3"
+        audio_buffer.seek(0)
+
+        logger.info("Sending downloaded file to Whisper model")
+
+        transcription = client.audio.transcriptions.create(
+            file=audio_buffer,
+            model="whisper-large-v3",
+            response_format="json",
+            language="en"
+        )
+
+        text = None
+        if isinstance(transcription, dict):
+            text = transcription.get("text")
+        else:
+            text = getattr(transcription, "text", None)
+
+        return {
+            "text": text or "",
+            "source": "url_transcription"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("URL transcription failed")
+        raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
+
 
 # keep the app reference for Vercel/Uvicorn
 app = app

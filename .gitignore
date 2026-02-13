@@ -105,3 +105,4 @@ yarn.lock
 *.bak
 *.backup
 *.old
+backend/key.json
