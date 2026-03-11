@@ -310,8 +310,8 @@ audioFileInput?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 50 * 1024 * 1024) {
-        alert('File size too large. Maximum 50MB allowed.');
+    if (file.size > 25 * 1024 * 1024) {
+        alert('File size too large. Maximum 25MB allowed.');
         return;
     }
 
