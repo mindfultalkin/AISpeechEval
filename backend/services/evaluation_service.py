@@ -1,6 +1,6 @@
 import json
 from fastapi import HTTPException
-from core.config import client, logger
+from backend.core.config import client, logger
 
 
 async def evaluate(question, rubrics, response):

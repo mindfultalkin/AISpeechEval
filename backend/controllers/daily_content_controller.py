@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from services.daily_content_service import generate_daily_content
+from backend.services.daily_content_service import generate_daily_content
 
 router = APIRouter()
 

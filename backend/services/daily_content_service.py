@@ -2,7 +2,7 @@ import json
 import re
 import random
 from fastapi import HTTPException
-from core.config import client, logger
+from backend.core.config import client, logger
 
 # =========================
 # VARIATION POOLS

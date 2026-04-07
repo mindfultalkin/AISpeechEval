@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from services.transcription_service import transcribe_file, transcribe_url
+from backend.services.transcription_service import transcribe_file, transcribe_url
 
 router = APIRouter()
 
