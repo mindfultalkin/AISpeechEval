@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 from backend.controllers.transcription_controller import router as transcription_router
 from backend.controllers.evaluation_controller import router as evaluation_router
