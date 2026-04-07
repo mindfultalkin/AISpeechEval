@@ -21,7 +21,8 @@ def root():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy"},
+    "api_configured": bool(os.getenv("GROQ_API_KEY"))
 
 # Register routers
 app.include_router(transcription_router, prefix="/api")
