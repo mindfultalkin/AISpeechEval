@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 # Routers
-from backend.controllers.transcription_controller import router as transcription_router
-from backend.controllers.evaluation_controller import router as evaluation_router
-from backend.controllers.daily_content_controller import router as daily_content_router
+from controllers.transcription_controller import router as transcription_router
+from controllers.evaluation_controller import router as evaluation_router
+from controllers.daily_content_controller import router as daily_content_router
 
 # App init
 app = FastAPI(title="AI Evaluation Tool API")

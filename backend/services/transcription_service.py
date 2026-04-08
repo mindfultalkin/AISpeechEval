@@ -1,7 +1,7 @@
 import io
 import requests
 from fastapi import UploadFile, HTTPException
-from backend.core.config import client, logger
+from core.config import client, logger
 
 
 async def transcribe_file(audio: UploadFile):

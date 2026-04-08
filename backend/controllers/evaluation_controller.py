@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Form, HTTPException
-from backend.services.evaluation_service import evaluate
+from services.evaluation_service import evaluate
 
 router = APIRouter()
 

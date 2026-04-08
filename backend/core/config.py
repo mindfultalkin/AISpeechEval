@@ -5,8 +5,6 @@ import logging
 
 load_dotenv()
 
-print("KEY:", os.getenv("GROQ_API_KEY"))
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ai-eval-api")
 
