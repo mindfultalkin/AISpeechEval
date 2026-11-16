@@ -2,7 +2,7 @@ import json
 import re
 import random
 from fastapi import HTTPException
-from backend.core.config import openai_client, OPENAI_MODEL, logger
+from backend.core.config import ask_claude, logger
 
 # =========================
 # VARIATION POOLS
@@ -128,20 +128,11 @@ Return ONLY JSON:
 """
 
     try:
-        completion = openai_client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": "Generate highly diverse content"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=1.2,
-            top_p=0.9,
-            frequency_penalty=1.0,
-            presence_penalty=1.0,
-            max_tokens=500
+        raw = ask_claude(
+            prompt,
+            system="Generate highly diverse content",
+            effort="low",
         )
-
-        raw = completion.choices[0].message.content
         result = extract_json(raw)
 
         if not result:

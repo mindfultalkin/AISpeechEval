@@ -29,7 +29,7 @@ def root():
 def health_check():
     return {
         "status": "healthy",
-        "api_configured": bool(os.getenv("GROQ_API_KEY")) and bool(os.getenv("OPENAI_API_KEY"))
+        "api_configured": bool(os.getenv("GROQ_API_KEY")) and bool(os.getenv("ANTHROPIC_API_KEY"))
     }
 
 # Register routers

@@ -1,6 +1,6 @@
 import json
 from fastapi import HTTPException
-from backend.core.config import openai_client, OPENAI_MODEL, logger
+from backend.core.config import ask_claude, logger
 
 
 async def evaluate(question, rubrics, response):
@@ -20,13 +20,7 @@ async def evaluate(question, rubrics, response):
     }}
     """
 
-    completion = openai_client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
-
-    raw = completion.choices[0].message.content.strip()
+    raw = ask_claude(prompt)
 
     try:
         start = raw.find("{")
