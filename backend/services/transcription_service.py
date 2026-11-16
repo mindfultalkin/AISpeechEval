@@ -11,7 +11,7 @@ async def transcribe_file(audio: UploadFile):
         raise HTTPException(status_code=400, detail="Empty file")
 
     audio_buffer = io.BytesIO(content)
-    audio_buffer.name = audio.filename or "audio.webm"
+    audio_buffer.name = audio.filename or "audio.mp4"
 
     transcription = client.audio.transcriptions.create(
         file=audio_buffer,
