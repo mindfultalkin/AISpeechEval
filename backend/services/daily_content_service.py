@@ -2,7 +2,7 @@ import json
 import re
 import random
 from fastapi import HTTPException
-from backend.core.config import client, logger
+from backend.core.config import openai_client, OPENAI_MODEL, logger
 
 # =========================
 # VARIATION POOLS
@@ -128,8 +128,8 @@ Return ONLY JSON:
 """
 
     try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        completion = openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": "Generate highly diverse content"},
                 {"role": "user", "content": prompt}
