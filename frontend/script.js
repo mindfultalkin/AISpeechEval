@@ -55,6 +55,66 @@ function extensionForType(mimeType) {
     if (mimeType.includes('webm')) return 'webm';
     return 'mp4';
 }
+
+// Browser recordings (MP4 or WebM) are streamed in fragments that some
+// speech-to-text decoders read as silence. Before uploading, decode the
+// recording here and re-encode it as a plain 16 kHz mono WAV, the format
+// Whisper uses internally, so every OS and browser sends the same file.
+const WAV_SAMPLE_RATE = 16000;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // Vercel rejects request bodies over ~4.5 MB
+const SILENCE_PEAK = 0.01; // about -40 dB
+
+async function recordingToWav(blob) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let decoded;
+    try {
+        decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+    } finally {
+        ctx.close();
+    }
+
+    const length = Math.max(1, Math.ceil(decoded.duration * WAV_SAMPLE_RATE));
+    const offline = new OfflineAudioContext(1, length, WAV_SAMPLE_RATE);
+    const source = offline.createBufferSource();
+    source.buffer = decoded; // stereo is mixed down to mono automatically
+    source.connect(offline.destination);
+    source.start();
+    const samples = (await offline.startRendering()).getChannelData(0);
+
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+        const v = Math.abs(samples[i]);
+        if (v > peak) peak = v;
+    }
+
+    return { wav: encodeWav(samples, WAV_SAMPLE_RATE), peak, duration: decoded.duration };
+}
+
+function encodeWav(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeString = (offset, s) => { for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i)); };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);          // PCM header size
+    view.setUint16(20, 1, true);           // PCM
+    view.setUint16(22, 1, true);           // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // byte rate
+    view.setUint16(32, 2, true);           // block align
+    view.setUint16(34, 16, true);          // bits per sample
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    for (let i = 0, offset = 44; i < samples.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return new Blob([buffer], { type: 'audio/wav' });
+}
 let evaluationHistory = [];
 let selectedLevel = null;
 const selectedCells = new Map();
@@ -418,8 +478,25 @@ async function transcribeAudio() {
     micButton.disabled = true;
 
     try {
+        let uploadBlob = audioBlob;
+        let uploadName = recordingFileName;
+        try {
+            const { wav, peak } = await recordingToWav(audioBlob);
+            if (peak < SILENCE_PEAK) {
+                throw new Error('No sound was recorded. Check that your browser is allowed to use the microphone (on Mac: System Settings → Privacy & Security → Microphone) and that the right input device is selected.');
+            }
+            if (wav.size <= MAX_UPLOAD_BYTES) {
+                uploadBlob = wav;
+                uploadName = 'recording.wav';
+            }
+        } catch (convertError) {
+            if (convertError.message.startsWith('No sound was recorded')) throw convertError;
+            // Could not decode locally: send the original recording instead.
+            console.warn('WAV conversion failed, uploading original recording:', convertError);
+        }
+
         const formData = new FormData();
-        formData.append('audio', audioBlob, recordingFileName);
+        formData.append('audio', uploadBlob, uploadName);
 
         const response = await fetch(`${API_PREFIX}/transcribe`, {
             method: 'POST',
